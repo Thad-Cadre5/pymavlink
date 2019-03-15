@@ -30,7 +30,7 @@ DEFAULT_STRICT_UNITS = False
 MAXIMUM_INCLUDE_FILE_NESTING = 5
 
 # List the supported languages. This is done globally because it's used by the GUI wrapper too
-supportedLanguages = ["C", "CS", "JavaScript", "Python", "WLua", "ObjC", "Swift", "Java", "C++11"]
+supportedLanguages = ["C", "CS", "CS2", "JavaScript", "Python", "WLua", "ObjC", "Swift", "Java", "C++11"]
 
 
 def mavgen(opts, args):
@@ -174,6 +174,9 @@ def mavgen(opts, args):
     elif opts.language == 'cs':
         from . import mavgen_cs
         mavgen_cs.generate(opts.output, xml)
+    elif opts.language == 'cs2':
+        from . import mavgen_cs2
+        mavgen_cs2.generate(opts.output, xml)
     elif opts.language == 'javascript':
         from . import mavgen_javascript
         mavgen_javascript.generate(opts.output, xml)
