@@ -55,7 +55,7 @@ def generate_message_header(f, xml):
 																xml.message_min_lengths[msgid],
                                                                 xml.message_lengths[msgid],
                                                                 name.lower())
-            xml.message_names_enum += '%s = %u,\n' % (name, msgid)
+            xml.message_names_enum += '         %s = %u,\n' % (name, msgid)
     else:
         for msgid in range(256):
             crc = xml.message_crcs.get(msgid, None)
@@ -68,7 +68,7 @@ def generate_message_header(f, xml):
 																	length,
                                                                     length,
                                                                     name.lower())
-                xml.message_names_enum += '%s = %u,\n' % (name, msgid)
+                xml.message_names_enum += '         %s = %u,\n' % (name, msgid)
     
     # add some extra field attributes for convenience with arrays
     for m in xml.enum:
@@ -85,8 +85,6 @@ def generate_message_header(f, xml):
            
     t.write(f, '''
 using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Runtime.InteropServices;
 
 public partial class MAVLink
@@ -95,13 +93,18 @@ public partial class MAVLink
     public const string MAVLINK_WIRE_PROTOCOL_VERSION = "${wire_protocol_version}";
     public const int MAVLINK_MAX_PAYLOAD_LEN = ${largest_payload};
 
-    public const byte MAVLINK_CORE_HEADER_LEN = 9;///< Length of core header (of the comm. layer)
-    public const byte MAVLINK_CORE_HEADER_MAVLINK1_LEN = 5;///< Length of MAVLink1 core header (of the comm. layer)
-    public const byte MAVLINK_NUM_HEADER_BYTES = (MAVLINK_CORE_HEADER_LEN + 1);///< Length of all header bytes, including core and stx
+    public const byte MAVLINK_VERSION = ${version};
+
+	public const byte MAVLINK_IFLAG_SIGNED = 0x01;
+	public const byte MAVLINK_IFLAG_MASK   = 0x01;
+
+    public const byte MAVLINK_CORE_HEADER_LEN = 9;  ///< Length of core header (of the comm. layer)
+    public const byte MAVLINK_CORE_HEADER_MAVLINK1_LEN = 5; ///< Length of MAVLink1 core header (of the comm. layer)
+    public const byte MAVLINK_NUM_HEADER_BYTES = (MAVLINK_CORE_HEADER_LEN + 1); ///< Length of all header bytes, including core and stx
     public const byte MAVLINK_NUM_CHECKSUM_BYTES = 2;
     public const byte MAVLINK_NUM_NON_PAYLOAD_BYTES = (MAVLINK_NUM_HEADER_BYTES + MAVLINK_NUM_CHECKSUM_BYTES);
 
-    public const int MAVLINK_MAX_PACKET_LEN = (MAVLINK_MAX_PAYLOAD_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES + MAVLINK_SIGNATURE_BLOCK_LEN);///< Maximum packet length
+    public const int MAVLINK_MAX_PACKET_LEN = (MAVLINK_MAX_PAYLOAD_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES + MAVLINK_SIGNATURE_BLOCK_LEN); ///< Maximum packet length
     public const byte MAVLINK_SIGNATURE_BLOCK_LEN = 13;
 
     public const int MAVLINK_LITTLE_ENDIAN = 1;
@@ -120,16 +123,11 @@ public partial class MAVLink
     public const byte MAVLINK_COMMAND_24BIT = ${command_24bit_define};
         
     public const bool MAVLINK_NEED_BYTE_SWAP = (MAVLINK_ENDIAN == MAVLINK_LITTLE_ENDIAN);
-        
+    
     // msgid, name, crc, length, type
     public static readonly message_info[] MAVLINK_MESSAGE_INFOS = new message_info[] {
 ${message_infos_array}
 	};
-
-    public const byte MAVLINK_VERSION = ${version};
-
-	public const byte MAVLINK_IFLAG_SIGNED=  0x01;
-	public const byte MAVLINK_IFLAG_MASK   = 0x01;
 
     public struct message_info
     {
@@ -158,7 +156,7 @@ ${message_infos_array}
 
     public enum MAVLINK_MSG_ID 
     {
-        ${message_names_enum}
+${message_names_enum}
     }  
 	    
 ''', xml)
@@ -222,9 +220,8 @@ def generate_message_enums(f, xml):
     ///<summary> ${description} </summary>
     public enum ${name}: ${enumtype}
     {
-		${{entry:	///<summary> ${description} |${{param:${description}| }} </summary>
-        [Description("${description}")]
-        ${name}=${value}, 
+    ${{entry:    ///<summary> ${description} |${{param:${description}| }} </summary>
+        ${name}=${value},
     }}
     };
     }}
@@ -243,12 +240,10 @@ def generate_message_h(f, directory, m):
     t.write(f, '''
 
     [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length})]
-    ///<summary> ${description} </summary>
+    /// <summary> ${description} </summary>
     public struct mavlink_${name_lower}_t
     {
-${{ordered_fields:        /// <summary>${description} ${enum} ${units} ${display}</summary>
-        [Units("${units}")]
-        [Description("${description}")]
+    ${{ordered_fields:    /// <summary>${description} ${enum} ${units} ${display}</summary>
         ${array_prefix} ${type} ${name}${array_suffix};
     }}
     };
@@ -352,7 +347,8 @@ def generate_one(fh, basename, xml):
                 else:
                     f.c_test_value = f.test_value
                 if f.enum != "":
-                    f.type = "/*" +f.enum + "*/" + f.type;
+                    f.type = f.enum
+                    #f.type = "/*" +f.enum + "*/" + f.type;
                     #f.type = "/*" +f.type + "*/" + f.enum;
                 f.array_suffix = ''
                 f.array_prefix = 'public '

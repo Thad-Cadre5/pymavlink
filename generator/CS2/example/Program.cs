@@ -31,6 +31,17 @@ namespace csharp
                 }
             }
 
+            Console.WriteLine("Testing incremental message parsing");
+            for(int i=0; i < data.Length; i++)
+            {
+                var messages2 = parser.ParseBytes(new byte[] { data[i] });
+                if( messages2.Count > 0)
+                {
+                    Console.WriteLine("Parsed message at {0} bytes: {1}", i, messages2[0].toJson());
+                }
+            }
+
+
             //    string TEST_MESSAGE = "{\"system_id\":123,\"component_id\":212,\"message_name\":\"HEARTBEAT\",\"payload\":{\"custom_mode\":4,\"type\":1,\"autopilot\":2,\"base_mode\":3,\"system_status\":5,\"mavlink_version\":1}}";
             //    //MavnetMessage jsmsg = Newtonsoft.Json.JsonConvert.DeserializeObject<MavnetMessage>(TEST_MESSAGE);
             //    Console.WriteLine(jsmsg.toJson());
