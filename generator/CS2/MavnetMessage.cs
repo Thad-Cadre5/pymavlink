@@ -47,6 +47,18 @@ public class MavnetMessage
     }
 
     /// <summary>
+    /// Convenience method to generate a MAVLink v2 byte message.
+    /// </summary>
+    public byte[] GenerateMAVLinkPacket(MAVLink.MAVLINK_MSG_ID messageType, object indata, byte sysid = 255, byte compid = 0, int sequence = -1, byte[] signingkey = null)
+    {        
+        message_id = (uint)messageType;
+        payload = indata;
+        system_id = sysid;
+        component_id = compid;        
+        return toBytes(signingkey);
+    }
+    
+    /// <summary>
     /// Serialize this message to MAVLink v2 byte message.
     /// </summary>
     public byte[] toBytes(byte []signingKey = null)
