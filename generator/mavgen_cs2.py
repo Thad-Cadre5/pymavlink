@@ -239,7 +239,7 @@ def generate_message_h(f, directory, m):
     '''generate per-message header for a XML file'''
     t.write(f, '''
 
-    [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length})]
+    [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length},CharSet=CharSet.Ansi)]
     /// <summary> ${description} </summary>
     public struct mavlink_${name_lower}_t
     {
@@ -254,6 +254,11 @@ def generate_message_h(f, directory, m):
 class mav_include(object):
     def __init__(self, base):
         self.base = base
+
+
+def is_string_field(msg_name, field_name):
+    return field_name == "param_id" or field_name == "text"
+
 
 def generate_one(fh, basename, xml):
     '''generate headers for one XML file'''
@@ -278,7 +283,18 @@ def generate_one(fh, basename, xml):
             f.description = f.description.replace("\n","    \n///")
             f.description = f.description.replace("\r","")
             f.description = f.description.replace("\"","'")
-            if f.array_length != 0:
+
+            if is_string_field(m.msg_name, f.name):
+                f.array_suffix = ''
+                f.array_tag = ''
+                f.array_const = 'const '
+                f.decode_left = "%s.%s = " % (m.name_lower, f.name)
+                f.decode_right = ''
+
+                f.array_prefix = '[MarshalAs(UnmanagedType.ByValTStr,SizeConst=%u)]\n\t\tpublic' % f.array_length
+                f.type = 'string'
+                f.return_type = 'string'
+            elif f.array_length != 0:
                 f.array_suffix = ''
                 f.array_prefix = '[MarshalAs(UnmanagedType.ByValArray,SizeConst=%u)]\n\t\tpublic' % f.array_length
                 f.array_arg = ', %u' % f.array_length
