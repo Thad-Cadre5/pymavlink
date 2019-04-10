@@ -241,7 +241,7 @@ def generate_message_h(f, directory, m):
 
     [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length},CharSet=CharSet.Ansi)]
     /// <summary> ${description} </summary>
-    public struct mavlink_${name_lower}_t
+    public class mavlink_${name_lower}_t
     {
     ${{ordered_fields:    /// <summary>${description} ${enum} ${units} ${display}</summary>
         ${array_prefix} ${type} ${name}${array_suffix};
@@ -309,25 +309,41 @@ def generate_one(fh, basename, xml):
                     f.type = "byte[]"
                     f.array_tag = 'System.Text.ASCIIEncoding.ASCII.GetString(msg,%u,%u); //' % (f.wire_offset, f.array_length)
                     f.return_type = 'byte[]'
-                    f.c_test_value = ".ToCharArray()";
+                    f.c_test_value = ".ToCharArray()"
                 elif f.type == 'uint8_t':
-                    f.type = "byte[]";
+                    f.type = "byte[]"
                     f.array_tag = 'getBytes'
                     f.return_type = 'byte[]'
                 elif f.type == 'int8_t':
-                    f.type = "byte[]";
+                    f.type = "sbyte[]"
                     f.array_tag = 'getBytes'
-                    f.return_type = 'byte[]'
+                    f.return_type = 'sbyte[]'
                 elif f.type == 'int16_t':
-                    f.type = "Int16[]";
+                    f.type = "Int16[]"
                     f.array_tag = 'getBytes'
                     f.return_type = 'Int16[]'
                 elif f.type == 'uint16_t':
-                    f.type = "UInt16[]";
+                    f.type = "UInt16[]"
                     f.array_tag = 'getBytes'
                     f.return_type = 'UInt16[]'
+                elif f.type == 'int32_t':
+                    f.type = "Int32[]"
+                    f.array_tag = 'getBytes'
+                    f.return_type = 'Int32[]'
+                elif f.type == 'uint32_t':
+                    f.type = "UInt32[]"
+                    f.array_tag = 'getBytes'
+                    f.return_type = 'UInt32[]'
+                elif f.type == 'long':
+                    f.type = "Int64[]"
+                    f.array_tag = 'getBytes'
+                    f.return_type = 'Int64[]'
+                elif f.type == 'ulong':
+                    f.type = "UInt64[]"
+                    f.array_tag = 'getBytes'
+                    f.return_type = 'UInt64[]'
                 elif f.type == 'float':
-                    f.type = "float[]";
+                    f.type = "float[]"
                     f.array_tag = 'getBytes'
                     f.return_type = 'float[]'
                 else:
@@ -339,27 +355,27 @@ def generate_one(fh, basename, xml):
                 f.get_arg = ', %s %s' % (f.type, f.name)
             else:
                 if f.type == 'char':
-                    f.type = "byte";
+                    f.type = "byte"
                 elif f.type == 'uint8_t':
-                    f.type = "byte";
+                    f.type = "byte"
                 elif f.type == 'int8_t':
-                    f.type = "byte";
+                    f.type = "sbyte"
                 elif f.type == 'int16_t': 
-                    f.type = "short";
+                    f.type = "short"
                 elif f.type == 'uint16_t': 
-                    f.type = "ushort";
+                    f.type = "ushort"
                 elif f.type == 'uint32_t':
-                    f.type = "uint";
+                    f.type = "uint"
                 elif f.type == 'int16_t': 
-                    f.type = "short";
+                    f.type = "short"
                 elif f.type == 'int32_t':
-                    f.type = "int";
+                    f.type = "int"
                 elif f.type == 'uint64_t':
-                    f.type = "ulong";                  
+                    f.type = "ulong"
                 elif f.type == 'int64_t':     
-                    f.type = "long";   
+                    f.type = "long"
                 elif f.type == 'float':     
-                    f.type = "float"; 
+                    f.type = "float"
                 else:
                     f.c_test_value = f.test_value
                 if f.enum != "":
