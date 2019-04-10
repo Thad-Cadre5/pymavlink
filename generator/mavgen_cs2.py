@@ -168,27 +168,27 @@ def generate_message_enum_types(xml):
         for fld in m.fields:
             if fld.array_length == 0:
                 if fld.type == 'char':
-                    fld.type = "byte";
+                    fld.type = "byte"
                 elif fld.type == 'uint8_t':
-                    fld.type = "byte";
+                    fld.type = "byte"
                 elif fld.type == 'int8_t':
-                    fld.type = "byte";
+                    fld.type = "sbyte"
                 elif fld.type == 'int16_t': 
-                    fld.type = "short";
+                    fld.type = "short"
                 elif fld.type == 'uint16_t': 
-                    fld.type = "ushort";
+                    fld.type = "ushort"
                 elif fld.type == 'uint32_t':
-                    fld.type = "uint";
+                    fld.type = "uint"
                 elif fld.type == 'int16_t': 
-                    fld.type = "short";
+                    fld.type = "short"
                 elif fld.type == 'int32_t':
-                    fld.type = "int";
+                    fld.type = "int"
                 elif fld.type == 'uint64_t':
-                    fld.type = "ulong";                  
+                    fld.type = "ulong"
                 elif fld.type == 'int64_t':     
-                    fld.type = "long";   
-                elif fld.type == 'float':     
-                    fld.type = "float"; 
+                    fld.type = "long"
+                elif fld.type == 'float':
+                    fld.type = "float"
             if fld.enum != "":
                 enumtypes[fld.enum] = fld.type
                 print fld.enum + " is type " + fld.type
