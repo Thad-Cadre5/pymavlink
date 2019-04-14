@@ -2,6 +2,9 @@
 using System.IO;
 using System.Security.Cryptography;
 using Newtonsoft.Json;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Linq;
 
 [JsonObject(MemberSerialization.OptIn)]
 [JsonConverter(typeof(MavnetMessageConverter))]
@@ -50,20 +53,39 @@ public class MavnetMessage
     /// Convenience method to generate a MAVLink v2 byte message.
     /// </summary>
     public byte[] GenerateMAVLinkPacket(MAVLink.MAVLINK_MSG_ID messageType, object indata, byte sysid = 255, byte compid = 0, int sequence = -1, byte[] signingkey = null)
-    {        
+    {
         message_id = (uint)messageType;
         payload = indata;
         system_id = sysid;
-        component_id = compid;        
+        component_id = compid;
         return toBytes(signingkey);
     }
-    
+
+    /// <summary>
+    /// Convert a struct to an array of bytes, struct fields being reperesented in 
+    /// little endian (LSB first)
+    /// </summary>
+    /// <remarks>Note - assumes little endian host order</remarks>
+    /// 
+    /// DEPRECATED 
+    /// TODO: GET RID OF THIS GARBAGE
+    private static byte[] StructureToByteArray(object obj)
+    {
+        int len = Marshal.SizeOf(obj);
+        byte[] arr = new byte[len];
+        IntPtr ptr = Marshal.AllocHGlobal(len);
+        Marshal.StructureToPtr(obj, ptr, true);
+        Marshal.Copy(ptr, arr, 0, len);
+        Marshal.FreeHGlobal(ptr);
+        return arr;
+    }
+
     /// <summary>
     /// Serialize this message to MAVLink v2 byte message.
     /// </summary>
     public byte[] toBytes(byte []signingKey = null)
     {
-        byte[] payload_bytes = MavlinkUtil.StructureToByteArray(payload);
+        byte[] payload_bytes = StructureToByteArray(payload);
 
         // Truncate zero bytes at the end of the payload
         var length = payload_bytes.Length;
@@ -102,7 +124,8 @@ public class MavnetMessage
         }
 
         ushort checksum = MAVLink.MavlinkCRC.crc_calculate(packet, data.Length + MAVLink.MAVLINK_NUM_HEADER_BYTES);
-        checksum = MAVLink.MavlinkCRC.crc_accumulate(MAVLink.MAVLINK_MESSAGE_INFOS.GetMessageInfo(message_id).crc, checksum);
+        MAVLink.message_info message_info = MAVLink.MAVLINK_MESSAGE_INFOS.FirstOrDefault(info => info.msgid == message_id);
+        checksum = MAVLink.MavlinkCRC.crc_accumulate(message_info.crc, checksum);
 
         byte ck_a = (byte)(checksum & 0xFF); ///< High byte
         byte ck_b = (byte)(checksum >> 8);   ///< Low byte

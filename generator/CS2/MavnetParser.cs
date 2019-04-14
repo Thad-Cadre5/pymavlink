@@ -6,6 +6,7 @@ public class MavnetParser
     public long crcErrors;
     public long unknownMessageTypes;
     public long trashBytes;
+    public long parseErrors;
     public long packetsParsed;
 
     public delegate void PacketReceivedEventHandler(object sender, MavnetMessage e);
@@ -94,7 +95,19 @@ public class MavnetParser
             // Slice out the packet bytes and try to parse it into a MavLink packet
             idx += packetLength;
             Span<byte> fullPacket = pkt.Slice(0, packetLength);
-            MavnetMessage msg = ParseSinglePacket(fullPacket);
+
+            MavnetMessage msg = null;
+
+            try
+            {
+                msg = ParseSinglePacket(fullPacket);
+            }
+            catch(Exception ex)
+            {
+                log("Unable to parse packet: " + ex.Message);
+                parseErrors++;
+            }
+
             if (msg != null)
             {
                 newMessages.Add(msg);
@@ -185,25 +198,18 @@ public class MavnetParser
             return null;
         }
 
-        // Deserialize the payload
-        try
+        if (msg.payload_length == messageInfo.length)
         {
-            object payload = Activator.CreateInstance(messageInfo.type);
-            if (msg.is_mavlink_v2)
-            {
-                MavlinkUtil.ByteArrayToStructure(pkt.ToArray(), ref payload, MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length);
-            }
-            else
-            {
-                MavlinkUtil.ByteArrayToStructure(pkt.ToArray(), ref payload, 6, msg.payload_length);
-            }
-
-            msg.payload = payload;
+            msg.payload = messageInfo.deserializer(pkt.Slice(MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length));
         }
-        catch (Exception ex)
+        else
         {
-            log(ex.ToString());
-            return null;
+            // Handle zero byte payload truncation
+            // see: https://mavlink.io/en/guide/serialization.html#payload_truncation
+
+            Span<byte> paddedPayload = stackalloc byte[messageInfo.length];
+            pkt.Slice(MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length).CopyTo(paddedPayload);
+            msg.payload = messageInfo.deserializer(paddedPayload);
         }
 
         return msg;
