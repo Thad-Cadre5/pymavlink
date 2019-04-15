@@ -87,7 +87,6 @@ def generate_message_header(f, xml):
 using System;
 using System.IO;
 using System.Text;
-using System.Runtime.InteropServices;
 
 public partial class MAVLink
 {
@@ -203,14 +202,12 @@ def build_message_meta(messages):
             f.description = f.description.replace("\"", "'")
 
             # Default field metadata
-            f.marshal_prefix = ''
             f.serialize = 'b.Write(v.{})'.format(f.name)
             f.deserialize = ''
             f.enum_cast = ''
 
             if is_string_field(f):
                 # Strings
-                f.marshal_prefix = '[MarshalAs(UnmanagedType.ByValTStr,SizeConst=%u)]\n\t\t' % f.array_length
                 f.type = 'string'
                 f.deserialize = 'ASCIIEncoding.Default.GetString(spanBuf.Slice({}, {}).ToArray()).TrimEnd((Char)0)'.format(f.wire_offset, f.wire_length)
                 f.serialize = 'b.Write(EncodeString(v.{}, {}))'.format(f.name, f.wire_length)
@@ -268,7 +265,6 @@ def build_message_meta(messages):
             elif f.array_length != 0:
 
                 # Arrays
-                f.marshal_prefix = '[MarshalAs(UnmanagedType.ByValArray,SizeConst=%u)]\n\t\t' % f.array_length
                 f.serialize = 'b.Write(Array.ConvertAll(v.{}, Convert.ToByte))'.format(f.name)
 
                 if f.type == 'char':
@@ -363,12 +359,11 @@ def generate_message_enums(f, xml):
 def generate_message(f, m):
     t.write(f, '''
 
-    [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length},CharSet=CharSet.Ansi)]
     /// <summary> ${description} </summary>
     public class mavlink_${name_lower}_t
     {
     ${{ordered_fields:    /// <summary>${description} ${enum} ${units} ${display}</summary>
-        ${marshal_prefix} public ${type} ${name};
+        public ${type} ${name};
     }}
     };
 
