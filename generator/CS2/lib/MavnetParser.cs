@@ -198,18 +198,26 @@ public class MavnetParser
             return null;
         }
 
-        if (msg.payload_length == messageInfo.length)
+        if (msg.is_mavlink_v2)
         {
-            msg.payload = messageInfo.deserializer(pkt.Slice(MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length));
-        }
+            // Mavlink V2
+            if (msg.payload_length == messageInfo.length)
+            {
+                msg.payload = messageInfo.deserializer(pkt.Slice(MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length));
+            }
+            else
+            {
+                // Handle zero byte payload truncation
+                // see: https://mavlink.io/en/guide/serialization.html#payload_truncation
+                Span<byte> paddedPayload = stackalloc byte[messageInfo.length];
+                pkt.Slice(MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length).CopyTo(paddedPayload);
+                msg.payload = messageInfo.deserializer(paddedPayload);
+            }
+        } 
         else
         {
-            // Handle zero byte payload truncation
-            // see: https://mavlink.io/en/guide/serialization.html#payload_truncation
-
-            Span<byte> paddedPayload = stackalloc byte[messageInfo.length];
-            pkt.Slice(MAVLink.MAVLINK_NUM_HEADER_BYTES, msg.payload_length).CopyTo(paddedPayload);
-            msg.payload = messageInfo.deserializer(paddedPayload);
+            // Mavlink V1
+            msg.payload = messageInfo.deserializer(pkt.Slice(MAVLink.MAVLINK_CORE_HEADER_MAVLINK1_LEN+1, msg.payload_length));
         }
 
         return msg;
