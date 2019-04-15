@@ -43,12 +43,13 @@ def generate_message_header(f, xml):
         # we sort with primary key msgid, secondary key dialect
         for msgid in sorted(xml.message_names.keys()):
             name = xml.message_names[msgid]
-            xml.message_infos_array += '		new message_info(%u, "%s", %u, %u, %u, typeof(mavlink_%s_t), Deserialize_%s),\n' % (
+            xml.message_infos_array += '		new message_info(%u, "%s", %u, %u, %u, typeof(mavlink_%s_t), Deserialize_%s, Serialize_%s),\n' % (
             msgid,
             name,
             xml.message_crcs[msgid],
             xml.message_min_lengths[msgid],
             xml.message_lengths[msgid],
+            name.lower(),
             name.lower(),
             name.lower())
             xml.message_names_enum += '         %s = %u,\n' % (name, msgid)
@@ -58,12 +59,13 @@ def generate_message_header(f, xml):
             name = xml.message_names.get(msgid, None)
             length = xml.message_lengths.get(msgid, None)
             if name is not None:
-                xml.message_infos_array += '		new message_info(%u, "%s", %u, %u, %u, typeof mavlink_%s_t), Deserialize_%s),\n' % (
+                xml.message_infos_array += '		new message_info(%u, "%s", %u, %u, %u, typeof mavlink_%s_t), Deserialize_%s, Serialize_%s),\n' % (
                     msgid,
                     name,
                     crc,
                     length,
                     length,
+                    name.lower(),
                     name.lower(),
                     name.lower())
                 xml.message_names_enum += '         %s = %u,\n' % (name, msgid)
@@ -125,6 +127,7 @@ public partial class MAVLink
     public const bool MAVLINK_NEED_BYTE_SWAP = (MAVLINK_ENDIAN == MAVLINK_LITTLE_ENDIAN);
     
     public delegate object DeserializeDelegate(ReadOnlySpan<byte> buf);
+    public delegate byte[] SerializeDelegate(object v);
     
     static byte[] EncodeString(String s, int fullLength)
     {
@@ -148,8 +151,9 @@ ${message_infos_array}
         public int length { get; internal set; }
         public Type type { get; internal set; }
         public DeserializeDelegate deserializer { get; internal set; }
-
-        public message_info(uint msgid, string name, byte crc, int minlength, int length, Type type, DeserializeDelegate deserializer)
+        public SerializeDelegate serializer { get; internal set; }
+        
+        public message_info(uint msgid, string name, byte crc, int minlength, int length, Type type, DeserializeDelegate deserializer, SerializeDelegate serializer)
         {
             this.msgid = msgid;
             this.name = name;
@@ -158,6 +162,7 @@ ${message_infos_array}
             this.length = length;
             this.type = type;
             this.deserializer = deserializer;
+            this.serializer = serializer;
         }
 
         public override string ToString()
@@ -388,8 +393,9 @@ def generate_deserializer(f, m):
 def generate_serializer(f, m):
     t.write(f, '''
 
-    public static byte[] Serialize_${name_lower}(mavlink_${name_lower}_t v) 
-    {
+    public static byte[] Serialize_${name_lower}(object o) 
+    {   
+        var v = (mavlink_${name_lower}_t) o;
         using (MemoryStream stream = new MemoryStream())
         {
             using (BinaryWriter b = new BinaryWriter(stream))
