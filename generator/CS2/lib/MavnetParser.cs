@@ -156,7 +156,7 @@ public class MavnetParser
             {
                 Span<byte> sig_block = pkt.Slice(pkt.Length - MAVLink.MAVLINK_SIGNATURE_BLOCK_LEN);
                 msg.signature_link_id = sig_block[0];
-                msg.signature_timestamp = BitConverter.ToUInt64(sig_block.Slice(1, 6));
+                msg.signature_timestamp = BitConverter.ToUInt64(sig_block.Slice(1, 6).ToArray(), 0);
                 msg.signature = sig_block.Slice(7).ToArray();
             }
         }

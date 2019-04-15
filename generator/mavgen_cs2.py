@@ -6,7 +6,7 @@ Copyright Michael Oborne 2018
 Released under GNU GPL version 3 or later
 '''
 
-import sys, textwrap, os, time, re
+import re
 from . import mavparse, mavtemplate
 
 t = mavtemplate.MAVTemplate()
@@ -34,12 +34,6 @@ def generate_message_header(f, xml):
         xml.aligned_fields_define = "1"
     else:
         xml.aligned_fields_define = "0"
-
-    # work out the included headers
-    xml.include_list = []
-    for i in xml.include:
-        base = i[:-4]
-        xml.include_list.append(mav_include(base))
 
     xml.message_names_enum = ''
 
@@ -89,6 +83,8 @@ def generate_message_header(f, xml):
 
     t.write(f, '''
 using System;
+using System.IO;
+using System.Text;
 using System.Runtime.InteropServices;
 
 public partial class MAVLink
@@ -129,6 +125,14 @@ public partial class MAVLink
     public const bool MAVLINK_NEED_BYTE_SWAP = (MAVLINK_ENDIAN == MAVLINK_LITTLE_ENDIAN);
     
     public delegate object DeserializeDelegate(ReadOnlySpan<byte> buf);
+    
+    static byte[] EncodeString(String s, int fullLength)
+    {
+        byte[] fullBuf = new byte[fullLength];
+        byte[] strBuf = ASCIIEncoding.Default.GetBytes(s);
+        Buffer.BlockCopy(strBuf, 0, fullBuf, 0, Math.Min(fullBuf.Length, strBuf.Length));
+        return fullBuf;
+    }
     
     // msgid, name, crc, length, type
     public static readonly message_info[] MAVLINK_MESSAGE_INFOS = new message_info[] {
@@ -174,7 +178,7 @@ def is_string_field(field):
     return field.name == "param_id" or field.name == "text" or field.name == "url"
 
 
-def generate_message_meta(messages):
+def build_message_meta(messages):
     """ Generate the metadata we're using for each message and field """
 
     for m in messages:
@@ -184,6 +188,10 @@ def generate_message_meta(messages):
 
         for f in m.fields:
 
+            # Check C# Keyword collisions
+            if f.name == 'fixed':
+                f.name = 'fixed_value'
+
             # Format the description text
             f.description = f.description.replace("\n", "    \n///")
             f.description = f.description.replace("\r", "")
@@ -191,61 +199,63 @@ def generate_message_meta(messages):
 
             # Default field metadata
             f.marshal_prefix = ''
-            f.deserializer = ''
+            f.serialize = 'b.Write(v.{})'.format(f.name)
+            f.deserialize = ''
             f.enum_cast = ''
 
             if is_string_field(f):
                 # Strings
                 f.marshal_prefix = '[MarshalAs(UnmanagedType.ByValTStr,SizeConst=%u)]\n\t\t' % f.array_length
                 f.type = 'string'
-                f.deserializer = 'System.Text.ASCIIEncoding.Default.GetString(buf.Slice({}, {}).ToArray()).TrimEnd((Char)0)'.format(f.wire_offset, f.wire_length)
+                f.deserialize = 'ASCIIEncoding.Default.GetString(spanBuf.Slice({}, {}).ToArray()).TrimEnd((Char)0)'.format(f.wire_offset, f.wire_length)
+                f.serialize = 'b.Write(EncodeString(v.{}, {}))'.format(f.name, f.wire_length)
 
             elif f.array_length == 0:
                 # Single value fields
 
                 if f.type == 'char':
                     f.type = "byte"
-                    f.deserializer = 'buf[{}]'.format(f.wire_offset)
+                    f.deserialize = 'buf[{}]'.format(f.wire_offset)
 
                 elif f.type == 'uint8_t':
                     f.type = "byte"
-                    f.deserializer = 'buf[{}]'.format(f.wire_offset)
+                    f.deserialize = 'buf[{}]'.format(f.wire_offset)
 
                 elif f.type == 'int8_t':
                     f.type = "sbyte"
-                    f.deserializer = '(sbyte) buf[{}]'.format(f.wire_offset)
+                    f.deserialize = '(sbyte) buf[{}]'.format(f.wire_offset)
 
                 elif f.type == 'int16_t':
                     f.type = "short"
-                    f.deserializer = 'BitConverter.ToInt16(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToInt16(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'uint16_t':
                     f.type = "ushort"
-                    f.deserializer = 'BitConverter.ToUInt16(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToUInt16(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'uint32_t':
                     f.type = "uint"
-                    f.deserializer = 'BitConverter.ToUInt32(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToUInt32(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'int32_t':
                     f.type = "int"
-                    f.deserializer = 'BitConverter.ToInt32(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToInt32(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'uint64_t':
                     f.type = "ulong"
-                    f.deserializer = 'BitConverter.ToUInt64(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToUInt64(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'int64_t':
                     f.type = "long"
-                    f.deserializer = 'BitConverter.ToInt64(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToInt64(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'float':
                     f.type = "float"
-                    f.deserializer = 'BitConverter.ToSingle(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToSingle(buf, {})'.format(f.wire_offset)
 
                 elif f.type == 'double':
                     f.type = "double"
-                    f.deserializer = 'BitConverter.ToDouble(buf.Slice({}, {}))'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'BitConverter.ToDouble(buf, {})'.format(f.wire_offset)
 
                 else:
                     raise Exception("Unhandled data type: " + f.type)
@@ -254,49 +264,51 @@ def generate_message_meta(messages):
 
                 # Arrays
                 f.marshal_prefix = '[MarshalAs(UnmanagedType.ByValArray,SizeConst=%u)]\n\t\t' % f.array_length
+                f.serialize = 'b.Write(Array.ConvertAll(v.{}, Convert.ToByte))'.format(f.name)
 
                 if f.type == 'char':
                     f.type = "byte[]"
-                    f.deserializer = 'buf.Slice({}, {}).ToArray()'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'spanBuf.Slice({}, {}).ToArray()'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'uint8_t':
                     f.type = "byte[]"
-                    f.deserializer = 'buf.Slice({}, {}).ToArray()'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'spanBuf.Slice({}, {}).ToArray()'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'int8_t':
                     f.type = "sbyte[]"
-                    f.deserializer = f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToSByte)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = f.deserializer = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToSByte)'.format(f.wire_offset, f.wire_length)
+
                 elif f.type == 'int16_t':
                     f.type = "Int16[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToInt16)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToInt16)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'uint16_t':
                     f.type = "UInt16[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToUInt16)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToUInt16)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'int32_t':
                     f.type = "Int32[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToInt32)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToInt32)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'uint32_t':
                     f.type = "UInt32[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToUInt32)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToUInt32)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'long':
                     f.type = "Int64[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToInt64)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToInt64)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'ulong':
                     f.type = "UInt64[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToUInt64)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToUInt64)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'float':
                     f.type = "float[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToSingle)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToSingle)'.format(f.wire_offset, f.wire_length)
 
                 elif f.type == 'double':
                     f.type = "double[]"
-                    f.deserializer = 'Array.ConvertAll(buf.Slice({}, {}).ToArray(), Convert.ToDouble)'.format(f.wire_offset, f.wire_length)
+                    f.deserialize = 'Array.ConvertAll(spanBuf.Slice({}, {}).ToArray(), Convert.ToDouble)'.format(f.wire_offset, f.wire_length)
 
                 else:
                     raise Exception("Unhandled array data type: " + f.type)
@@ -304,13 +316,9 @@ def generate_message_meta(messages):
             # Enums
             if f.enum != "":
                 enumtypes[f.enum] = f.type
-                f.type = f.enum
                 f.enum_cast = '({})'.format(f.enum)
-                print f.enum + " is type " + f.type
-
-            # C# Keyword collisions
-            if f.name == 'fixed':
-                f.name = 'fixed_value'
+                f.serialize = 'b.Write(({}) v.{})'.format(f.type, f.name)
+                f.type = f.enum
 
 
 def generate_message_enums(f, xml):
@@ -347,14 +355,7 @@ def generate_message_enums(f, xml):
 ''', xml)
 
 
-def generate_message_footer(f, xml):
-    t.write(f, '''
-}
-''', xml)
-    f.close()
-
-
-def generate_message_h(f, m):
+def generate_message(f, m):
     t.write(f, '''
 
     [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length},CharSet=CharSet.Ansi)]
@@ -369,56 +370,58 @@ def generate_message_h(f, m):
 ''', m)
 
 
-def generate_deserializers(f, m):
+def generate_deserializer(f, m):
     t.write(f, '''
         
-    public static mavlink_${name_lower}_t Deserialize_${name_lower}(ReadOnlySpan<byte> buf) 
+    public static mavlink_${name_lower}_t Deserialize_${name_lower}(ReadOnlySpan<byte> spanBuf) 
     {
+        byte[] buf = spanBuf.ToArray();
         var v = new mavlink_${name_lower}_t();
         ${{ordered_fields: 
-        v.${name} = ${enum_cast} ${deserializer}; }}
+        v.${name} = ${enum_cast} ${deserialize}; }}
         return v;
     }
 
 ''', m)
 
 
-class mav_include(object):
-    def __init__(self, base):
-        self.base = base
+def generate_serializer(f, m):
+    t.write(f, '''
 
-def generate_one(fh, basename, xml):
-    '''generate headers for one XML file'''
+    public static byte[] Serialize_${name_lower}(mavlink_${name_lower}_t v) 
+    {
+        using (MemoryStream stream = new MemoryStream())
+        {
+            using (BinaryWriter b = new BinaryWriter(stream))
+            {
+                ${{ordered_fields: 
+                ${serialize}; }}
+            }
+            stream.Flush();
+            return stream.GetBuffer();
+        }
+    }
 
-    directory = os.path.join(basename, xml.basename)
-
-    print("Generating CSharp implementation in directory %s" % directory)
-    mavparse.mkdir_p(directory)
-
-    for m in xml.message:
-        generate_message_h(fh, m)
-        generate_deserializers(fh, m)
-
+''', m)
 
 def generate(basename, xml_list):
-    '''generate complete MAVLink Csharp implemenation'''
+    """ Implement the mavlink generate function to output C# """
 
-    directory = os.path.join(basename, xml_list[0].basename)
-
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    f = open(os.path.join(directory, "mavlink.cs"), mode='w')
+    f = open(basename + ".cs", mode='w')
 
     generate_message_header(f, xml_list[0])
 
     for xml in xml_list:
-        generate_message_meta(xml.message)
+        build_message_meta(xml.message)
 
     for xml in xml_list:
         generate_message_enums(f, xml)
 
     for xml in xml_list:
-        generate_one(f, basename, xml)
+        for m in xml.message:
+            generate_message(f, m)
+            generate_serializer(f, m)
+            generate_deserializer(f, m)
 
-    generate_message_footer(f, xml_list[0])
+    t.write(f, '''}''', xml)
+    f.close()
