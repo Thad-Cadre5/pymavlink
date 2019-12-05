@@ -182,7 +182,7 @@ def mavgen(opts, args):
         mavgen_javascript.generate(opts.output, xml)
     elif opts.language == 'typescript2':
         from . import mavgen_typescript2
-        mavgen_typescript.generate(opts.output, xml)
+        mavgen_typescript2.generate(opts.output, xml)
     elif opts.language == 'objc':
         from . import mavgen_objc
         mavgen_objc.generate(opts.output, xml)
